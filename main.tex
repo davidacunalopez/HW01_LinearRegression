@@ -1,0 +1,170 @@
+% !TeX program = pdflatex
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ---- Paquetes ----
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\sisetup{detect-weight=true,detect-family=true}
+
+% Rutas comunes para figuras
+\graphicspath{{figs/}{figures/}{images/}{img/}{./}}
+
+% --- Utilidades de placeholders de figuras ---
+\newcommand{\placeholderbox}[2][5cm]{%
+  \fbox{\begin{minipage}[c][#1][c]{0.9\linewidth}\centering \textbf{Placeholder:} #2\end{minipage}}}
+
+% label, caption, filename
+\newcommand{\placefigure}[3]{%
+\begin{figure}[H]\centering
+\IfFileExists{#3}{\includegraphics[width=\linewidth]{#3}}{\placeholderbox{#3}}
+\caption{#2}\label{#1}\end{figure}}
+
+% width, filename, subcaption, label
+\newcommand{\placesubfig}[4]{%
+\begin{subfigure}{#1}
+\centering
+\IfFileExists{#2}{\includegraphics[width=\linewidth]{#2}}{\placeholderbox{#2}}
+\caption{#3}\label{#4}
+\end{subfigure}}
+
+% ---- Título y autores ----
+\title{Implementación de Regresión Lineal
+Manual con Descenso de Gradiente\vspace{-0.35em}}
+
+\author{\IEEEauthorblockN{Priscilla Jim\'enez Salgado\IEEEauthorrefmark{1}, Fabi\'an Araya Ortega\IEEEauthorrefmark{1}, David Acu\~na L\'opez\IEEEauthorrefmark{1}}
+\IEEEauthorblockA{\IEEEauthorrefmark{1}Curso de Inteligencia Artificial, Escuela de Ingenier\'ia en Computaci\'on, Tecnol\'ogico de Costa Rica (TEC)\\}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Se presenta un informe t\'ecnico del estudio de rendimiento acad\'emico estudiantil basado en un conjunto de 10{,}000 observaciones y 6 variables (5 num\'ericas y 1 categ\'orica). Tras una limpieza que elimina 127 duplicados exactos, el conjunto final contiene 9{,}873 filas. El an\'alisis exploratorio (EDA) confirma ausencia de nulos y de \\emph{outliers} relevantes (ajustando el m\'etodo IQR a rangos reales). La correlaci\'on m\'as alta con el rendimiento (\emph{Performance Index}) es la de \emph{Previous Scores} ($r\approx0{.}915$), seguida de \emph{Hours Studied} ($r\approx0{.}374$); el resto de variables muestran asociaciones d\'ebiles. Para evitar fuga de informaci\'on, la divisi\'on en train/val/test (70/15/15) se realiza por grupos de vectores de caracter\'isticas id\'enticos. Se implementa regresi\'on lineal con descenso por gradiente (batch y mini-batch); los errores en test son \SI{4.3302}{} (batch) y \SI{4.3518}{} (mini-batch), con $R^2\approx0{.}988$.\footnote{Este informe resume \'unicamente los resultados cuantitativos y hallazgos documentados en el PDF del cuaderno de trabajo.}
+\end{abstract}
+
+\begin{IEEEkeywords}
+EDA, regresi\'on lineal, descenso por gradiente, muestreo estratificado, fuga de informaci\'on, rendimiento acad\'emico.
+\end{IEEEkeywords}
+
+\section{Introducci\'on}
+Este documento reporta los hallazgos de un estudio de predicci\'on del rendimiento acad\'emico estudiantil. El flujo metodol\'ogico comprende: (i) revisi\'on estructural del conjunto de datos, (ii) EDA con estad\'isticas y gr\'aficos, (iii) control de duplicados y definici\'on de grupos de caracter\'isticas, (iv) divisi\'on del conjunto en entrenamiento/validaci\'on/prueba mediante muestreo aleatorio y estratificado por cuartiles del objetivo, y (v) ajuste y evaluaci\'on de un modelo de regresi\'on lineal optimizado por descenso del gradiente (batch y mini-batch).
+
+\section{Conjunto de Datos y Preprocesamiento}
+\subsection{Estructura y tipos}
+El conjunto tiene 6 columnas: \emph{Hours Studied}, \emph{Previous Scores}, \emph{Extracurricular Activities} (categ\'orica Yes/No), \emph{Sleep Hours}, \emph{Sample Question Papers Practiced} y \emph{Performance Index}. Se verifica ausencia de valores nulos y tipos consistentes para an\'alisis num\'erico.
+
+\subsection{Limpieza y duplicados}
+Se eliminan 127 filas duplicadas exactas, pasando de 10{,}000 a 9{,}873 instancias. Se identifican 1{,}312 filas que comparten exactamente el mismo vector de caracter\'isticas (\(\mathbf{x}\) id\'entico) pero con potenciales diferencias en la variable objetivo; estos casos no se eliminan y se tratan en la etapa de divisi\'on para prevenir fuga de informaci\'on.
+
+\subsection{Codificaci\'on}
+Se crea una versi\'on binaria de \emph{Extracurricular Activities} (Yes=1, No=0) para c\'alculo de correlaciones y modelado.
+
+\section{An\'alisis Exploratorio de Datos (EDA)}
+
+
+% --- Figuras EDA: distribuciones univariadas ---
+\begin{figure}[H]\centering
+  \placesubfig{0.48\linewidth}{eda_hours_hist.png}{Histograma: Hours Studied}{fig:hist_hours}
+  \placesubfig{0.48\linewidth}{eda_prev_scores_hist.png}{Histograma: Previous Scores}{fig:hist_prev}
+  \placesubfig{0.48\linewidth}{eda_sleep_hist.png}{Histograma: Sleep Hours}{fig:hist_sleep}
+  \placesubfig{0.48\linewidth}{eda_sample_papers_hist.png}{Histograma: Sample Papers}{fig:hist_papers}
+  \caption{Distribuciones univariadas (ejemplos).}
+  \label{fig:eda_dists}
+\end{figure}
+
+Las variables num\'ericas presentan rangos plausibles (por ejemplo, \emph{Hours Studied} en [1,9], \emph{Previous Scores} en [40,99], \emph{Sleep Hours} en [4,9], \emph{Sample Question Papers Practiced} en [0,9], y \emph{Performance Index} en [10,100]). Media y mediana son coherentes, sin indicios de sesgos extremos.
+
+
+% --- Figuras EDA: boxplots ---
+\placefigure{fig:boxplots}{Boxplots por variable (verificaci\'on de outliers).}{eda_boxplots.png}
+
+Aplicando IQR con l\'imites te\'oricos ajustados a los rangos observados de cada variable, no se detectan outliers relevantes; por tanto, no se aplican recortes ni transformaciones especiales.
+
+
+% --- Figuras EDA: correlaciones y dispersi\'on ---
+\begin{figure}[H]\centering
+  \placesubfig{0.48\linewidth}{corr_heatmap.png}{Matriz de correlaci\'on}{fig:corr_heatmap}
+  \placesubfig{0.48\linewidth}{target_scatter_prev_scores.png}{Objetivo vs Previous Scores}{fig:scat_prev}
+  \caption{Relaciones con la variable objetivo.}
+  \label{fig:corr_and_scatter}
+\end{figure}
+
+La Tabla~\ref{tab:corr} resume las correlaciones de Pearson con \emph{Performance Index}: \emph{Previous Scores} ($r\approx0{.}915$) y \emph{Hours Studied} ($r\approx0{.}374$) muestran asociaciones significativa y moderada, respectivamente; \emph{Sleep Hours} ($r\approx0{.}048$), \emph{Sample Papers Practiced} ($r\approx0{.}043$) y la versi\'on binaria de \emph{Extracurricular} ($r\approx0{.}025$) presentan relaciones d\'ebiles.
+
+\begin{table}[H]
+  \centering
+  \caption{Correlaci\'on de cada variable con el objetivo (\emph{Performance Index}).}
+  \label{tab:corr}
+  \begin{tabular}{lS[table-format=1.3]}
+    \toprule
+    Variable & {\(r\)} \\
+    \midrule
+    Previous Scores & 0.915 \\
+    Hours Studied & 0.374 \\
+    Sleep Hours & 0.048 \\
+    Sample Question Papers Practiced & 0.043 \\
+    Extracurricular (bin) & 0.025 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Divisi\'on del Conjunto de Datos}
+Para evitar fuga de informaci\'on, la unidad de muestreo es el \emph{grupo de caracter\'isticas id\'enticas}. Se crean identificadores de grupo, y luego se dividen los grupos en proporciones 70/15/15.
+
+
+
+% --- Divisi\'on: tama\~nos de particiones (aleatorio por grupos) ---
+\placefigure{fig:split_random}{Tama\~no de particiones (aleatorio por grupos).}{split_random_bars.png}
+
+Se reporta: 9{,}208 grupos \'unicos; filas por grupo en $[1,3]$. Asignaci\'on: 6{,}445 grupos a entrenamiento, 1{,}381 a validaci\'on y 1{,}382 a prueba, resultando en 6{,}930 (70.2\%), 1{,}474 (14.9\%) y 1{,}469 (14.9\%) filas, respectivamente, sin solapamientos entre particiones.
+
+
+% --- Divisi\'on: estratificado ---
+\begin{figure}[H]\centering
+  \placesubfig{0.48\linewidth}{split_strat_counts.png}{Tama\~nos por partici\'on}{fig:strat_counts}
+  \placesubfig{0.48\linewidth}{strata_distributions.png}{Distribuciones por estrato}{fig:strata_dist}
+  \caption{Muestreo estratificado por cuartiles del objetivo.}
+  \label{fig:stratified}
+\end{figure}
+
+Se definen estratos por cuartiles de \emph{Performance Index} (cuantiles aproximados: Q1=40, Q2=55, Q3=70). La asignaci\'on final por filas es: 6{,}892 (69.8\%) entrenamiento, 1{,}492 (15.1\%) validaci\'on y 1{,}489 (15.1\%) prueba, preservando la distribuci\'on por estratos en cada subconjunto y sin solapamientos.
+
+\section{Modelo de Regresi\'on Lineal}
+\subsection{Formulaci\'on}
+Se ajusta un modelo lineal $\hat{y}=\mathbf{x}^{\top}\boldsymbol{\theta}$ minimizando el error cuadr\'atico medio (MSE). La actualizaci\'on por descenso del gradiente (batch) est\'andar es
+\begin{equation}
+  \boldsymbol{\theta} \leftarrow \boldsymbol{\theta} - \alpha\,\nabla_{\boldsymbol{\theta}}\,\mathcal{L}(\boldsymbol{\theta}),
+\end{equation}
+con tasa de aprendizaje $\alpha$ y funci\'on de p\'erdida $\mathcal{L}$ definida como el MSE.
+
+
+% --- Curvas de aprendizaje ---
+\begin{figure}[H]\centering
+  \placesubfig{0.48\linewidth}{loss_train_val_batch.png}{MSE train/val (batch GD)}{fig:loss_batch}
+  \placesubfig{0.48\linewidth}{loss_train_val_minibatch.png}{MSE train/val (mini-batch GD)}{fig:loss_minibatch}
+  \caption{Curvas de aprendizaje durante el entrenamiento.}
+  \label{fig:learning_curves}
+\end{figure}
+
+\subsection{M\'etricas finales}
+
+\section{Discusi\'on}
+
+\section{Conclusiones}
+
+\section{Bibliograf\'ia}
+
+
+
+\end{document}
